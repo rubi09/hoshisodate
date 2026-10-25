@@ -1,0 +1,1346 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ほしそだて</title>
+<meta name="description" content="勉強した時間で、星雲から46億年の地球史をたどって惑星が育つ。勉強モチベのための育成ゲーム。">
+<meta name="theme-color" content="#070a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ほしそだて">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 観測窓（惑星）が主役。右に観測記録の帳面。宇宙を描くページなので暗色ひとつに絞る */
+:root {
+  color-scheme: dark;
+  --space: #070a14;
+  --panel: #0e1322;
+  --panel-2: #131a2d;
+  --line: #222b45;
+  --ink: #ebe7dc;
+  --dim: #8e95ac;
+  --gold: #f1c778;
+  --sea: #74b8da;
+  --warn: #e3846f;
+  --f-display: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+[hidden] { display: none !important; }
+html, body { background: var(--space); color: var(--ink); }
+body {
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px 40px;
+}
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+
+/* 観測窓 */
+.view {
+  position: sticky;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #03050b;
+  border: 1px solid var(--line);
+}
+@media (max-width: 860px) { .view { position: relative; top: 0; } }
+canvas#sky { width: 100%; height: 100%; display: block; }
+.view .cap {
+  position: absolute; left: 16px; bottom: 14px; right: 16px;
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 12px;
+  pointer-events: none;
+}
+.cap .now { display: grid; gap: 0; text-shadow: 0 1px 8px rgba(0,0,0,.8); min-width: 0; }
+.cap .now b { font-family: var(--f-display); font-weight: 700; font-size: 20px; letter-spacing: .04em; }
+.cap .now span { font-family: var(--f-mono); font-size: 12px; color: var(--dim); }
+.cap button { pointer-events: auto; flex: none; }
+.nogl {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 24px;
+  text-align: center; color: var(--dim);
+}
+.toast {
+  position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
+  background: rgba(7,10,20,.78); border: 1px solid var(--gold); color: var(--ink);
+  padding: 8px 16px; border-radius: 999px; font-size: 14px; white-space: nowrap;
+  backdrop-filter: blur(6px);
+  transition: opacity .6s;
+  z-index: 3;
+}
+.toast b { color: var(--gold); font-family: var(--f-display); }
+
+/* 帳面 */
+.log { display: grid; gap: 22px; min-width: 0; }
+.eyebrow {
+  font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; color: var(--gold);
+}
+h1.stage {
+  font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 4.4vw, 44px);
+  line-height: 1.2; margin: 4px 0 6px; letter-spacing: .03em; text-wrap: balance;
+}
+.desc { color: var(--dim); margin: 0; max-width: 34em; }
+
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.stat { background: var(--panel); padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.stat .k { font-size: 12px; color: var(--dim); letter-spacing: .06em; }
+.stat .v { font-family: var(--f-mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat .v small { font-size: 12px; color: var(--dim); margin-left: 2px; }
+.stat .v.era { font-family: var(--f-body); font-size: 18px; }
+
+.next { display: grid; gap: 8px; }
+.next .row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; flex-wrap: wrap; }
+.next .row span:last-child { font-family: var(--f-mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--sea), var(--gold)); border-radius: 99px; transition: width .4s; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 12px; }
+.card h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--dim); letter-spacing: .08em; }
+
+.timer { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.clock { font-family: var(--f-mono); font-size: 40px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: .02em; line-height: 1; }
+.clock.on { color: var(--gold); }
+
+button {
+  font: inherit; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 9px 14px; cursor: pointer;
+}
+button:hover { border-color: #3a4566; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+button.primary { background: var(--gold); color: #1a1406; border-color: var(--gold); font-weight: 600; padding: 11px 20px; }
+button.primary:hover { filter: brightness(1.06); }
+button.primary.stop { background: transparent; color: var(--gold); }
+button.ghost { background: rgba(7,10,20,.6); font-size: 13px; padding: 6px 12px; backdrop-filter: blur(4px); }
+button.chip { padding: 5px 11px; font-size: 13px; font-family: var(--f-mono); }
+
+.manual { display: grid; gap: 10px; }
+.manual .fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input[type=number], input[type=date] {
+  font: inherit; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; min-width: 0;
+}
+input[type=number] { width: 92px; font-family: var(--f-mono); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; color: var(--warn); }
+
+.list { list-style: none; margin: 0; padding: 0; display: grid; }
+.list li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.list li:first-child { border-top: 0; }
+.list .when { color: var(--dim); font-family: var(--f-mono); font-size: 13px; }
+.list .when em { font-style: normal; font-family: var(--f-body); font-size: 11px; margin-left: 6px; color: var(--dim); border: 1px solid var(--line); padding: 0 6px; border-radius: 99px; }
+.list .min { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.list button { padding: 3px 9px; font-size: 12px; color: var(--dim); }
+.list button.sure { color: var(--warn); border-color: var(--warn); }
+.empty { color: var(--dim); font-size: 14px; margin: 0; }
+
+.chron { list-style: none; margin: 0; padding: 0; display: grid; }
+.chron li { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 4px 8px; align-items: baseline; border-radius: 4px; }
+.chron li.era { display: block; padding: 12px 0 4px; font-size: 11px; letter-spacing: .14em; color: var(--dim); border-bottom: 1px solid var(--line); margin-bottom: 4px; border-radius: 0; }
+.chron li.era:first-child { padding-top: 0; }
+.chron .nm { font-family: var(--f-display); font-size: 15px; }
+.chron .nm small { font-family: var(--f-mono); font-size: 11px; color: var(--dim); margin-left: 8px; }
+.chron .hr { font-family: var(--f-mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.chron li.here { background: rgba(241,199,120,.10); }
+.chron li.here .nm { color: var(--gold); }
+.chron li.future .nm { color: #4b5470; letter-spacing: .2em; }
+.chron li.next .nm { color: var(--dim); }
+
+.streak-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.ss { display: grid; min-width: 0; }
+.ss .k { font-size: 12px; color: var(--dim); }
+.ss .v { font-family: var(--f-mono); font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.3; }
+.ss .v small { font-size: 12px; color: var(--dim); margin-left: 2px; font-weight: 400; }
+.ss .sub { font-size: 11px; color: var(--dim); font-family: var(--f-mono); }
+.ss.am .v { color: var(--gold); }
+.heat { display: grid; grid-template-columns: 16px minmax(0,1fr); gap: 4px 6px; }
+.heat .months { grid-column: 2; display: grid; grid-template-columns: repeat(20, minmax(0,1fr)); gap: 3px; font-size: 10px; color: var(--dim); height: 14px; }
+.heat .months span { white-space: nowrap; }
+.heat .wd { display: grid; grid-template-rows: repeat(7, minmax(0,1fr)); gap: 3px; font-size: 10px; color: var(--dim); }
+.heat .wd span { display: flex; align-items: center; }
+.cells { display: grid; grid-template-columns: repeat(20, minmax(0,1fr)); grid-template-rows: repeat(7, auto); grid-auto-flow: column; gap: 3px; }
+.cell { aspect-ratio: 1; border-radius: 2px; background: var(--panel-2); position: relative; }
+.cell.l1 { background: #173246; }
+.cell.l2 { background: #22587a; }
+.cell.l3 { background: #3c8db8; }
+.cell.l4 { background: #8fd0ee; }
+.cell.fut { background: transparent; }
+.cell.today { outline: 1px solid var(--dim); outline-offset: 1px; }
+.cell.am::after { content: ""; position: absolute; width: 40%; height: 40%; left: 30%; top: 30%; border-radius: 50%; background: var(--gold); box-shadow: 0 0 4px rgba(241,199,120,.8); }
+.legend { display: flex; gap: 5px; align-items: center; font-size: 11px; color: var(--dim); flex-wrap: wrap; }
+.legend .cell { width: 11px; display: inline-block; }
+.legend .sep { width: 10px; }
+.mcheck { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--dim); }
+.mcheck input { width: 16px; height: 16px; accent-color: var(--gold); }
+.list .when em.am { color: var(--gold); border-color: rgba(241,199,120,.5); }
+
+.foot { font-size: 12px; color: var(--dim); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.msg { font-size: 13px; color: var(--sea); min-height: 1em; margin: 0; }
+
+/* 集中画面：星を主役に、数字は下に小さく */
+.focus {
+  position: fixed; inset: 0; z-index: 50; background: #000; color: #d6d1c4;
+  display: grid; place-items: center;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  user-select: none; -webkit-user-select: none;
+}
+#focus canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fbox { position: absolute; left: 0; right: 0; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 1; display: grid; justify-items: center; gap: 10px; transition: transform 3s ease; text-shadow: 0 2px 14px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.8); pointer-events: none; }
+.fel { font-family: var(--f-mono); font-size: clamp(44px, 12vw, 104px); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap; }
+.fel small { font-family: var(--f-body); font-size: .3em; color: #9a9486; margin: 0 .35em 0 .08em; letter-spacing: 0; }
+.fel small:last-child { margin-right: 0; }
+.focus.idle .fel { font-family: var(--f-body); font-size: clamp(24px, 6vw, 44px); color: #9a9486; letter-spacing: .1em; }
+.fsub { display: flex; gap: 28px; font-family: var(--f-mono); font-size: clamp(16px, 4vw, 26px); color: #9a9486; font-variant-numeric: tabular-nums; }
+.fsub .low { color: var(--warn); }
+.fsub small { font-family: var(--f-body); font-size: .5em; margin-left: .4em; }
+.fctl { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; gap: 10px; }
+.fctl button { background: #0d0d0d; border-color: #2a2a2a; color: #bdb8ab; }
+.fhint { position: absolute; z-index: 2; top: calc(18px + env(safe-area-inset-top, 0px)); left: 0; right: 0; text-align: center; font-size: 12px; color: #3d3a34; }
+.trow { display: flex; }
+
+@media (max-width: 520px) {
+  .stat .v { font-size: 18px; }
+  .stat .v.era { font-size: 15px; }
+  .clock { font-size: 34px; }
+}
+</style>
+
+<div class="wrap">
+  <section class="view" aria-label="あなたの惑星">
+    <canvas id="sky"></canvas>
+    <div class="nogl" id="nogl" hidden>この端末では惑星を描画できませんでした。記録はそのまま使えます。</div>
+    <div class="toast" id="toast" hidden></div>
+    <div class="cap">
+      <div class="now"><b id="capName">星雲</b><span id="capAge">46.0億年前</span></div>
+      <button class="ghost" id="replay" type="button">最初から再生</button>
+    </div>
+  </section>
+
+  <main class="log">
+    <header>
+      <div class="eyebrow" id="stageNo">太陽系の誕生 ・ 1 / 56</div>
+      <h1 class="stage" id="stageName">星雲</h1>
+      <p class="desc" id="stageDesc"></p>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><span class="k">累計</span><span class="v" id="total">0.0<small>時間</small></span></div>
+      <div class="stat"><span class="k">今日</span><span class="v" id="today">0.0<small>時間</small></span></div>
+      <div class="stat"><span class="k">いまの時代</span><span class="v era" id="age">46.0億年前</span></div>
+    </div>
+
+    <div class="next">
+      <div class="row"><span id="nextLabel">次の出来事まで</span><span id="nextLeft"></span></div>
+      <div class="bar"><i id="nextBar"></i></div>
+    </div>
+
+    <section class="card">
+      <h2>タイマー</h2>
+      <div class="timer">
+        <div class="clock" id="clock">00:00:00</div>
+        <button class="primary" id="toggle" type="button">勉強をはじめる</button>
+      </div>
+      <div class="trow"><button type="button" id="focusBtn">集中画面ではじめる</button></div>
+      <div class="confirm" id="longConfirm" hidden>
+        <span>5時間以上たっています。記録する分数を確認してください。</span>
+        <input type="number" id="longMin" min="1" max="1440" step="1" aria-label="記録する分数">
+        <button type="button" id="longSave">記録する</button>
+        <button type="button" id="longCancel">記録しない</button>
+      </div>
+      <p class="msg" id="timerMsg"></p>
+    </section>
+
+    <section class="card" id="streakCard">
+      <h2>毎日の記録</h2>
+      <div class="streak-stats">
+        <div class="ss"><span class="k">連続</span><span class="v" id="stNow">0<small>日</small></span><span class="sub" id="stBest">最長 0日</span></div>
+        <div class="ss am"><span class="k">朝活の連続</span><span class="v" id="amNow">0<small>日</small></span><span class="sub" id="amBest">最長 0日</span></div>
+        <div class="ss"><span class="k">今月の朝活</span><span class="v" id="amMonth">0<small>日</small></span><span class="sub" id="amHint">4〜8時に開始</span></div>
+      </div>
+      <div class="heat">
+        <div class="months" id="hMonths"></div>
+        <div class="wd"><span>月</span><span></span><span>水</span><span></span><span>金</span><span></span><span>日</span></div>
+        <div class="cells" id="hCells"></div>
+      </div>
+      <div class="legend"><span>少</span><i class="cell"></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i><span>多</span><span class="sep"></span><i class="cell l2 am"></i><span>朝活した日</span></div>
+    </section>
+
+    <section class="card manual">
+      <h2>あとから記録する</h2>
+      <div class="chips" id="chips">
+        <button class="chip" type="button" data-m="15">15分</button>
+        <button class="chip" type="button" data-m="30">30分</button>
+        <button class="chip" type="button" data-m="60">60分</button>
+        <button class="chip" type="button" data-m="90">90分</button>
+      </div>
+      <div class="fields">
+        <input type="number" id="manMin" min="1" max="1440" step="1" placeholder="分" aria-label="分数">
+        <span style="color:var(--dim);font-size:14px">分</span>
+        <input type="date" id="manDate" aria-label="日付">
+        <button type="button" id="manAdd">記録する</button>
+      </div>
+      <label class="mcheck"><input type="checkbox" id="manMorning">朝活（朝4〜8時に勉強した）</label>
+      <p class="msg" id="manMsg"></p>
+    </section>
+
+    <section class="card">
+      <h2>勉強の記録</h2>
+      <ul class="list" id="list"></ul>
+    </section>
+
+    <section class="card">
+      <h2 id="chronTitle">惑星の年表</h2>
+      <p class="empty" id="planets"></p>
+      <ol class="chron" id="chron"></ol>
+    </section>
+
+    <section class="card" id="backupCard" hidden>
+      <h2>記録の引き継ぎ</h2>
+      <p class="empty">記録はこの端末のブラウザに保存されています。機種変更やブラウザのデータ削除に備えて、ときどき書き出しておくと安心です。読み込むと、今の記録に足し合わされます（同じ記録は重複しません）。</p>
+      <div class="fields" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" id="expBtn">記録を書き出す</button>
+        <button type="button" id="impBtn">記録を読み込む</button>
+        <input type="file" id="impFile" accept="application/json,.json" hidden>
+      </div>
+      <p class="msg" id="bkMsg"></p>
+    </section>
+
+    <div class="foot"><span id="sync">この端末に保存しています</span><span id="footNote"></span></div>
+  </main>
+</div>
+
+<div class="focus" id="focus" hidden role="dialog" aria-label="集中画面">
+  <div class="fhint" id="fHint">画面をタップすると操作ボタンが出ます</div>
+  <div class="fbox" id="fbox">
+    <div class="fel" id="fEl">0<small>分</small></div>
+    <div class="fsub"><span id="fClock">--:--</span><span id="fBat" hidden></span></div>
+  </div>
+  <div class="fctl" id="fctl" hidden>
+    <button type="button" id="fStop">終えて記録する</button>
+    <button type="button" id="fClose">閉じる</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- 年表（年代は世界シミュレーター設計書の timeline.json に準拠） ----------
+// h: 到達する累計時間 / ago: 何年前か（0=現在, -1=未来）
+const M = [
+  { h: 0,    era: '太陽系の誕生', name: '星雲',                 ago: 4.6e9,   desc: 'ガスと塵の雲がゆっくり渦を巻いている。ここから太陽系が生まれる。' },
+  { h: 2,    era: '太陽系の誕生', name: '原始太陽',             ago: 4.567e9, desc: '雲の中心がつぶれて、太陽が輝きはじめた。明るさは今の7割ほど。' },
+  { h: 5,    era: '太陽系の誕生', name: '微惑星の衝突',         ago: 4.54e9,  desc: '太陽のまわりの塵がぶつかり合い、集まって地球になっていく。' },
+  { h: 9,    era: '冥王代',       name: 'マグマの海',           ago: 4.53e9,  desc: 'できたばかりの地表は、溶けた岩の海に覆われている。' },
+  { h: 13,   era: '冥王代',       name: '月の誕生',             ago: 4.51e9,  desc: '火星ほどの天体がぶつかり、飛び散ったかけらが月になった。1日はわずか5時間ほど。' },
+  { h: 18,   era: '冥王代',       name: '最初の海',             ago: 4.4e9,   desc: '地表が冷えて雨が降り続き、海ができた。厚い大気で空は暗い橙色。' },
+  { h: 23,   era: '冥王代',       name: '激しい隕石の雨',       ago: 3.95e9,  desc: '小天体が次々に降り注ぐ時代があったとされる（諸説あり）。' },
+  { h: 29,   era: '太古代',       name: '生命の誕生',           ago: 3.9e9,   desc: '海のどこかで、最初の命が生まれた（時期は諸説あり）。' },
+  { h: 35,   era: '太古代',       name: 'ストロマトライト',     ago: 3.48e9,  desc: '微生物が浅い海に層を重ねていく。確実なものでは最古の化石。' },
+  { h: 41,   era: '太古代',       name: '酸素をつくる光合成',   ago: 3.0e9,   desc: 'シアノバクテリアが光から酸素をつくりはじめた。海は溶けた鉄で緑がかっている。' },
+  { h: 47,   era: '原生代',       name: '大酸化イベント',       ago: 2.43e9,  desc: '酸素が大気にたまりはじめ、橙の空が少しずつ青くなる。陸の岩は赤く錆びていく。' },
+  { h: 52,   era: '原生代',       name: 'ヒューロニアン氷期',   ago: 2.35e9,  desc: 'メタンの温室効果が弱まり、地球が大きく凍った。' },
+  { h: 57,   era: '原生代',       name: '真核生物の登場',       ago: 1.85e9,  desc: '核をもつ細胞が現れた。のちの植物や動物の祖先。' },
+  { h: 61,   era: '原生代',       name: '退屈な10億年',         ago: 1.3e9,   desc: '酸素は低いまま、環境が長く落ち着いていた時代。1日は18時間ほど。' },
+  { h: 65,   era: '原生代',       name: '超大陸ロディニア',     ago: 1.0e9,   desc: '大陸がひとつに集まった。最初の多細胞の藻も現れている。' },
+  { h: 70,   era: '原生代',       name: '全球凍結',             ago: 7.17e8,  desc: '赤道まで氷に覆われ、地球が真っ白な雪玉になった。' },
+  { h: 76,   era: '原生代',       name: '雪玉からの脱出',       ago: 6.35e8,  desc: '火山がためた二酸化炭素で温暖化し、氷が一気に溶けた。' },
+  { h: 81,   era: '原生代',       name: 'エディアカラ生物群',   ago: 5.75e8,  desc: '海の底に、最初の大きな多細胞生物が広がった。' },
+  { h: 88,   era: '古生代',       name: 'カンブリア爆発',       ago: 5.25e8,  desc: '目やあしをもつ動物が、一気に多様になった。' },
+  { h: 100,  era: '古生代',       name: '最初の脊椎動物',       ago: 4.85e8,  desc: '背骨をもつ魚が泳ぎはじめた。' },
+  { h: 110,  era: '古生代',       name: '植物の上陸',           ago: 4.7e8,   desc: 'コケのような植物が陸に上がり、大陸がはじめて緑を帯びる。' },
+  { h: 120,  era: '古生代',       name: 'オルドビス紀末の大絶滅', ago: 4.45e8, desc: '氷河が広がり、海の生き物の大半が姿を消した。' },
+  { h: 132,  era: '古生代',       name: '最初の森',             ago: 3.85e8,  desc: '木が生まれ、陸に森ができた。' },
+  { h: 145,  era: '古生代',       name: '四肢動物の上陸',       ago: 3.7e8,   desc: '魚から進化した四本足の動物が、陸を歩きはじめた。' },
+  { h: 160,  era: '古生代',       name: '石炭紀の大森林',       ago: 3.1e8,   desc: '酸素が今より濃く、巨大なトンボが森の上を飛ぶ。' },
+  { h: 178,  era: '古生代',       name: '超大陸パンゲア',       ago: 3.0e8,   desc: '大陸がふたたびひとつに集まった。' },
+  { h: 200,  era: '古生代',       name: 'ペルム紀末の大絶滅',   ago: 2.52e8,  desc: 'シベリアで噴火が続き、海の生き物の8割が消えた。地球史で最大の絶滅。' },
+  { h: 222,  era: '中生代',       name: '最初の恐竜',           ago: 2.33e8,  desc: '小さな恐竜が現れた。' },
+  { h: 242,  era: '中生代',       name: 'パンゲアの分裂',       ago: 2.01e8,  desc: '超大陸が割れはじめ、大西洋が開いていく。' },
+  { h: 262,  era: '中生代',       name: '最初の鳥',             ago: 1.5e8,   desc: '羽毛をもつ恐竜の仲間が、空へ飛び立った。' },
+  { h: 282,  era: '中生代',       name: '花の登場',             ago: 1.3e8,   desc: '花を咲かせる植物が現れ、陸の色がにぎやかになる。' },
+  { h: 302,  era: '中生代',       name: '白亜紀の温室期',       ago: 1.0e8,   desc: '極にも氷がなく、海面は今より100m以上高い。' },
+  { h: 322,  era: '中生代',       name: '隕石の衝突',           ago: 6.6e7,   desc: 'ユカタン半島に巨大な隕石が落ち、恐竜の時代が終わった。' },
+  { h: 336,  era: '新生代',       name: '哺乳類の時代',         ago: 5.6e7,   desc: '空いた世界に哺乳類が広がる。最古の霊長類もこのころ。' },
+  { h: 352,  era: '新生代',       name: '南極の氷床',           ago: 3.4e7,   desc: '南極が凍りはじめ、地球は寒冷化に向かう。' },
+  { h: 370,  era: '新生代',       name: '草原の拡大',           ago: 2.0e7,   desc: '乾いた大地に草原が広がった。日本列島も大陸から離れはじめる。' },
+  { h: 395,  era: '新生代',       name: '人類の祖先',           ago: 6.5e6,   desc: 'アフリカで、ヒトとチンパンジーの祖先が分かれた。' },
+  { h: 415,  era: '新生代',       name: '最古の石器',           ago: 3.3e6,   desc: '石を割って、道具をつくりはじめた。' },
+  { h: 435,  era: '新生代',       name: '氷河時代',             ago: 2.58e6,  desc: '氷期と間氷期がくり返す時代に入った。極の氷が息をするように伸び縮みする。' },
+  { h: 455,  era: '人類の時代',   name: '火の使用',             ago: 1.0e6,   desc: '夜の大地に、小さな火がともる（時期は諸説あり）。' },
+  { h: 480,  era: '人類の時代',   name: 'ホモ・サピエンス',     ago: 3.0e5,   desc: 'わたしたちの種が、アフリカで生まれた。' },
+  { h: 505,  era: '人類の時代',   name: '出アフリカ',           ago: 6.0e4,   desc: '人類がアフリカを出て、世界中へ歩いていく。' },
+  { h: 525,  era: '人類の時代',   name: '最終氷期最盛期',       ago: 2.1e4,   desc: '海面が今より130m低く、大陸どうしが陸でつながっていた。' },
+  { h: 545,  era: '人類の時代',   name: '農耕のはじまり',       ago: 1.05e4,  desc: '麦や稲を育てはじめ、村ができた。' },
+  { h: 565,  era: '人類の時代',   name: '文字の誕生',           ago: 5300,    desc: '言葉を記録できるようになった。' },
+  { h: 585,  era: '人類の時代',   name: '大洋の航海',           ago: 2000,    desc: '人びとが星を頼りに海を渡り、太平洋の島々にまで広がった。' },
+  { h: 605,  era: '人類の時代',   name: '世界がつながる',       ago: 526,     desc: '大陸どうしが航路で結ばれ、作物や人が地球をめぐる。灯りが海岸に並ぶ。' },
+  { h: 625,  era: '人類の時代',   name: '産業革命',             ago: 266,     desc: '機械と石炭の力で、街が大きくなっていく。' },
+  { h: 645,  era: '人類の時代',   name: '電気の夜',             ago: 126,     desc: '電灯が広まり、街どうしが光の線でつながった。' },
+  { h: 665,  era: '人類の時代',   name: '宇宙時代',             ago: 69,      desc: '人工衛星が地球をまわりはじめた。' },
+  { h: 700,  era: '人類の時代',   name: '現在',                 ago: 0,       desc: '今、あなたが生きている時代。ここから先は、まだ誰も見ていない。' },
+  { h: 735,  era: '未来',         name: '月面基地',             ago: -1,      desc: '月の夜の側にも、灯りがともった。' },
+  { h: 785,  era: '未来',         name: '軌道エレベーター',     ago: -1,      desc: '赤道から宇宙へ、細い塔がのびる。' },
+  { h: 850,  era: '未来',         name: '軌道リング',           ago: -1,      desc: '惑星をぐるりと囲むリングが完成した。' },
+  { h: 920,  era: '未来',         name: '太陽系に広がる',       ago: -1,      desc: '船が惑星のあいだを行き来しはじめた。' },
+  { h: 1000, era: '未来',         name: '星間文明',             ago: -1,      desc: 'この惑星から、隣の星へ船が旅立っていく。' },
+];
+const LAST = M.length - 1;
+
+// 実際の勉強時間での到達点。最初は速く、そのあとは約5〜6.5時間に1つ（1日5時間で毎日1つ進む目安）
+const RH = (() => {
+  const g0 = [1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+  const r = [0];
+  const rest = LAST - g0.length;
+  for (let j = 0; j < LAST; j++) {
+    const gap = j < g0.length ? g0[j] : 5 + 1.5 * (j - g0.length) / Math.max(1, rest - 1);
+    r.push(Math.round((r[j] + gap) * 2) / 2);
+  }
+  return r;
+})();
+const LAPLEN = RH[LAST] + 10; // 完成した惑星を10時間眺めてから次の惑星へ
+const PRESENT = M.findIndex(x => x.ago === 0);
+function toStory(h) {
+  if (h <= 0) return 0;
+  for (let i = 0; i < LAST; i++) if (h < RH[i + 1]) return M[i].h + (h - RH[i]) / (RH[i + 1] - RH[i]) * (M[i + 1].h - M[i].h);
+  return M[LAST].h;
+}
+function lapOf(total) { const lap = Math.floor(total / LAPLEN); return { lap, local: total - lap * LAPLEN }; }
+
+// 周回ごとの惑星。歴史の出来事は同じで、星の条件だけが違う
+const LAPS = [
+  { name: '地球', note: '史実どおりの地球', seed: 0, star: [1, 1, 1], veg: [0, 0, 0, 0], seaBias: 0, moon2: 0 },
+  { name: '赤い太陽の星', note: '赤い恒星のまわり。植物は光を逃さないよう黒っぽい赤に育つ', seed: 7.3, star: [1.0, 0.62, 0.45], veg: [0.30, 0.08, 0.10, 0.85], seaBias: 0, moon2: 0 },
+  { name: '海の惑星', note: '水がとても多く、陸は島だけ', seed: 13.1, star: [1, 1, 1], veg: [0, 0, 0, 0], seaBias: 0.13, moon2: 0 },
+  { name: '二つの月の星', note: '月が二つあり、陸が広い。植物は青緑', seed: 21.7, star: [0.9, 0.95, 1.08], veg: [0.12, 0.32, 0.30, 0.6], seaBias: -0.07, moon2: 1 },
+];
+const EXTRA_NAMES = ['朝凪の星', '琥珀の星', '遠雷の星', '白夜の星', '潮騒の星', '霧氷の星', '薄明の星', '群青の星'];
+function lapDef(n) {
+  if (n < LAPS.length) return LAPS[n];
+  const r = k => { const x = Math.sin(n * 91.7 + k * 13.3) * 43758.5453; return x - Math.floor(x); };
+  const stars = [[1, 1, 1, '太陽に似た恒星'], [1, 0.62, 0.45, '赤い恒星'], [0.88, 0.95, 1.1, '青白い恒星']];
+  const vegs = [[0, 0, 0, 0, '緑の植物'], [0.30, 0.08, 0.10, 0.85, '黒赤い植物'], [0.12, 0.32, 0.30, 0.6, '青緑の植物'], [0.45, 0.38, 0.10, 0.7, '黄金色の植物']];
+  const seas = [[0, '陸と海が半々'], [0.11, '海が多い'], [-0.07, '陸が広い']];
+  const st = stars[Math.floor(r(1) * 3)], vg = vegs[Math.floor(r(2) * 4)], se = seas[Math.floor(r(3) * 3)], m2 = r(4) < 0.4 ? 1 : 0;
+  const k = n - LAPS.length;
+  const name = EXTRA_NAMES[k % EXTRA_NAMES.length] + (k >= EXTRA_NAMES.length ? ' ' + (Math.floor(k / EXTRA_NAMES.length) + 1) : '');
+  return { name, note: [st[3], vg[4], se[1], m2 ? '月が二つ' : '月が一つ'].join('・'), seed: n * 5.17, star: st.slice(0, 3), veg: vg.slice(0, 4), seaBias: se[0], moon2: m2 };
+}
+
+function stageAt(h) { let i = 0; while (i < LAST && h >= M[i + 1].h) i++; return i; }
+function fracAt(h, i) { return i >= LAST ? 1 : Math.min(1, Math.max(0, (h - M[i].h) / (M[i + 1].h - M[i].h))); }
+function agoAt(h) {
+  const i = stageAt(h), a = M[i].ago;
+  if (a < 0) return -1;
+  if (i >= LAST) return a;
+  const b = M[i + 1].ago, f = fracAt(h, i);
+  if (b < 0) return a;
+  return Math.exp(Math.log(a + 1) + (Math.log(b + 1) - Math.log(a + 1)) * f) - 1;
+}
+function fmtAgo(y) {
+  if (y < 0) return '未来';
+  if (y < 0.5) return '現在';
+  if (y >= 1e8) return (y / 1e8).toFixed(1) + '億年前';
+  if (y >= 1e4) return Math.round(y / 1e4) + '万年前';
+  const year = 2026 - y;
+  if (y >= 1000) {
+    if (year <= 0) return '紀元前' + Math.max(1, Math.round((1 - year) / 100)) + '世紀';
+    return Math.max(1, Math.ceil(year / 100)) + '世紀';
+  }
+  return '西暦' + (Math.round(year / 10) * 10) + '年ごろ';
+}
+
+// ---------- 見た目のキーフレーム（累計時間 → パラメータ） ----------
+const TR = {
+  neb: [[0,1],[1.5,0.85],[4,0]],
+  collapse: [[0,0],[2.5,1]],
+  sunA: [[0,0],[1,0.15],[2.2,1]],
+  sunMv: [[5,0],[9,1]],
+  sunLum: [[2,0.7],[700,1]],
+  pr: [[5.5,0],[10,1]],
+  deb: [[4.5,0],[6,1],[9,1],[12.5,0]],
+  moon: [[12,0],[13.5,1]],
+  moonD: [[13,0],[61,0.6],[700,1]],
+  spin: [[4,3.5],[13,4.8],[61,1.6],[110,1.15],[700,1]],
+  lava: [[4,1],[14,1],[19,0]],
+  imp: [[18,0],[21,1],[27,1],[30,0]],
+  sea: [[14,0],[19,1]],
+  seaAdj: [[295,0],[302,0.05],[318,0.05],[340,0],[515,0],[525,-0.045],[540,0]],
+  atmR: [[10,0.5],[24,0.85],[46,0.85],[56,0.32]],
+  atmG: [[10,0.25],[24,0.5],[46,0.5],[56,0.56]],
+  atmB: [[10,0.1],[24,0.2],[46,0.2],[56,1.0]],
+  haze: [[12,0],[17,0.22],[30,0.28],[46,0.28],[54,0.06],[62,0]],
+  atm: [[9,0.15],[18,0.8],[700,1]],
+  ocR: [[18,0.05],[30,0.04],[46,0.04],[58,0.05],[86,0.06]],
+  ocG: [[18,0.04],[30,0.22],[46,0.22],[58,0.26],[86,0.30]],
+  ocB: [[18,0.04],[30,0.16],[46,0.16],[58,0.34],[86,0.46]],
+  mats: [[30,0],[36,1],[110,0.25],[140,0]],
+  redl: [[46,0],[54,1],[110,0.45],[150,0.2]],
+  ice: [[45,0],[50,0.05],[52,0.55],[55,0.08],[68,0.08],[70,1],[75,1],[78,0.15],[86,0.1],[118,0.1],[120,0.5],[124,0.12],[150,0.12],[162,0.42],[192,0.1],[200,0.02],[295,0.02],[302,0],[348,0],[354,0.2],[433,0.24],[523,0.5],[535,0.26],[700,0.25]],
+  iceOsc: [[433,0],[440,0.07],[540,0.07],[548,0]],
+  cloud: [[17,0.25],[30,0.5],[68,0.6],[71,0.25],[75,0.25],[78,0.65],[700,0.8]],
+  green: [[108,0],[115,0.35],[133,0.75],[150,1],[199,1],[203,0.3],[225,0.85],[320,1],[323,0.4],[340,1]],
+  forest: [[130,0],[137,0.6],[158,1],[199,1],[203,0.25],[240,0.75],[320,0.85],[323,0.3],[345,0.9],[700,0.75]],
+  flower: [[278,0],[290,1]],
+  grass: [[365,0],[378,1]],
+  volc: [[197,0],[200,1],[204,0],[318,0],[320,0.6],[323,0]],
+  dark: [[199,0],[201,0.45],[208,0],[321.5,0],[322.5,0.8],[330,0]],
+  flash: [[321.6,0],[322,1],[322.6,0]],
+  drift: [[0,0],[700,6]],
+  superc: [[61,0],[65,0.8],[72,0.8],[82,0.15],[165,0.2],[178,0.9],[236,0.9],[262,0.3],[700,0.1]],
+  fire: [[452,0],[458,0.15],[540,0.3]],
+  agri: [[542,0],[560,0.6]],
+  city: [[555,0],[565,0.08],[600,0.18],[625,0.35],[645,0.7],[700,1],[1000,1.3]],
+  coast: [[598,0],[608,1]],
+  roads: [[643,0],[660,1]],
+  sats: [[663,0],[700,0.45],[800,1]],
+  mbase: [[730,0],[738,1]],
+  elev: [[780,0],[790,1]],
+  ring: [[840,0],[880,1]],
+  ships: [[915,0],[935,0.35],[985,0.35],[1000,1]],
+  stars: [[0,0],[1000,1]],
+  lz: [[540,0.55],[625,0.28]],
+};
+const U_ORDER = ['neb','collapse','sunA','sunMv','sunLum','pr','deb','moon','moonD','spin','lava','imp','sea','seaAdj','atmR','atmG','atmB','haze','atm','ocR','ocG','ocB','mats','redl','ice','iceOsc','cloud','green','forest','flower','grass','volc','dark','flash','drift','superc','fire','agri','city','coast','roads','sats','mbase','elev','ring','ships','stars','lz'];
+// 末尾3つは回転角（JSで積算）
+function tv(k, h) {
+  const a = TR[k];
+  if (h <= a[0][0]) return a[0][1];
+  for (let i = 0; i < a.length - 1; i++) {
+    if (h <= a[i + 1][0]) {
+      const t = (h - a[i][0]) / (a[i + 1][0] - a[i][0]);
+      const e = t * t * (3 - 2 * t);
+      return a[i][1] + (a[i + 1][1] - a[i][1]) * e;
+    }
+  }
+  return a[a.length - 1][1];
+}
+const LAP_KEYS = ['seed', 'starR', 'starG', 'starB', 'vegR', 'vegG', 'vegB', 'vegAmt', 'seaBias', 'moon2', 'done'];
+const ALL_U = [...U_ORDER, ...LAP_KEYS, 'rot', 'crot', 'mang'];
+const N4 = Math.ceil(ALL_U.length / 4);
+const uBuf = new Float32Array(N4 * 4);
+const U_DEFS = ALL_U.map((k, i) => '#define ' + k.toUpperCase() + ' U4[' + (i >> 2) + '].' + 'xyzw'[i & 3]).join('\n');
+
+// ---------- 状態 ----------
+const LS_KEY = 'hoshisodate-v1';
+let state = { sessions: [], runningSince: null };
+try { const raw = localStorage.getItem(LS_KEY); if (raw) { const d = JSON.parse(raw); state.sessions = Array.isArray(d.sessions) ? d.sessions : []; state.runningSince = d.runningSince || null; } } catch (e) {}
+
+function persistLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
+
+let docRef = null, saving = Promise.resolve();
+function save() {
+  persistLocal();
+  if (!docRef) return;
+  const body = { sessions: state.sessions.slice(), runningSince: state.runningSince, updatedAt: Date.now() };
+  saving = saving.then(() => docRef.set(body)).then(() => setSync('同期済み（どの端末からでも同じ惑星）'))
+    .catch(() => setSync('同期できませんでした。この端末には保存しています'));
+}
+
+const $ = id => document.getElementById(id);
+function setSync(t) { $('sync').textContent = t; }
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function totalMin() { return state.sessions.reduce((s, x) => s + (x.min || 0), 0); }
+function runningMs() { return state.runningSince ? Math.max(0, Date.now() - state.runningSince) : 0; }
+function liveHours() { return (totalMin() + runningMs() / 60000) / 60; }
+const DAY_SHIFT = 4 * 3600e3; // 朝4時で日付が変わる
+function dayKey(ms) { return fmtDate(new Date(ms - DAY_SHIFT)); }
+function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function todayHours() {
+  const k = dayKey(Date.now());
+  let m = state.sessions.filter(s => dayKey(s.at) === k).reduce((a, s) => a + s.min, 0);
+  if (state.runningSince) m += runningMs() / 60000;
+  return m / 60;
+}
+function fmtH(h) { return h.toFixed(1); }
+function pad(n) { return String(n).padStart(2, '0'); }
+
+// ---------- 描画（WebGL） ----------
+const canvas = $('sky');
+const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false });
+let uRes, uT, uU;
+
+const VS = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+const FS = `
+precision highp float;
+uniform vec2 uRes; uniform float uT;
+uniform vec4 U4[${N4}];
+${U_DEFS}
+#define STARC vec3(STARR,STARG,STARB)
+
+float hash(vec3 p){p=fract(p*0.3183099+.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec3 x){vec3 i=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);
+ return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+            mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float fbm(vec3 p){float a=0.5,s=0.0;for(int i=0;i<5;i++){s+=a*noise(p);p=p*2.03+vec3(1.7,9.2,3.1);a*=0.5;}return s;}
+vec3 rotY(vec3 n,float r){return vec3(n.x*cos(r)+n.z*sin(r),n.y,-n.x*sin(r)+n.z*cos(r));}
+
+vec2 C=vec2(0.05,-0.05);
+
+vec4 moonAt(vec2 uv,float R,float t,vec3 L,float a,float orb,float mr,float amt,out float front){
+  vec2 mp=C+vec2(cos(a)*orb,sin(a)*0.32*orb/1.85)*R;
+  front=-sin(a);
+  mr*=R;
+  vec2 d=(uv-mp)/mr;float r2=dot(d,d);
+  if(r2>1.0||amt<=0.0)return vec4(0.0);
+  vec3 n=vec3(d,sqrt(1.0-r2));
+  float diff=max(dot(n,L),0.0);
+  float cr=fbm(n*4.0+11.0);
+  vec3 c=vec3(0.66,0.64,0.6)*(0.55+0.6*cr)*(0.03+diff*1.1*SUNLUM*STARC);
+  float nightM=smoothstep(0.1,-0.05,dot(n,L));
+  float base=smoothstep(0.8,0.86,noise(n*22.0+3.0))*smoothstep(0.45,0.6,fbm(n*3.0+7.0));
+  c+=vec3(1.0,0.75,0.4)*base*nightM*MBASE*1.5;
+  return vec4(c,amt*smoothstep(1.0,0.85,r2));
+}
+
+vec4 ringAt(vec2 uv,float R,float t,out float front){
+  vec2 d=(uv-C)/R;
+  vec2 e=vec2(d.x,d.y/0.24);
+  float k=abs(length(e)-1.52);
+  front=-d.y;
+  float band=smoothstep(0.07,0.02,k);
+  if(band<=0.0||RING<=0.0)return vec4(0.0);
+  float ang=atan(e.y,e.x);
+  float lights=smoothstep(0.82,1.0,sin(ang*70.0+t*0.4))*smoothstep(0.03,0.0,k);
+  vec3 c=vec3(0.55,0.56,0.6)*0.5+vec3(1.0,0.78,0.4)*lights*1.4;
+  return vec4(c,band*RING);
+}
+
+vec3 sats(vec2 uv,float R,float t,bool wantFront){
+  vec3 acc=vec3(0.0);
+  for(int i=0;i<14;i++){
+    float fi=float(i);
+    if(fi>=SATS*14.0)break;
+    float a=t*(0.22+0.045*fi)+fi*2.1;
+    float k=1.15+0.05*fi;
+    float inc=0.18+0.12*mod(fi,3.0);
+    vec2 lp=vec2(cos(a)*k,sin(a)*k*inc);
+    float ph=fi*0.71;
+    lp=vec2(lp.x*cos(ph)-lp.y*sin(ph),lp.x*sin(ph)+lp.y*cos(ph));
+    bool fr=sin(a)<0.0;
+    if(fr!=wantFront)continue;
+    if(!fr&&dot(lp,lp)<1.0)continue;
+    float d=length(uv-(C+lp*R));
+    acc+=vec3(0.85,0.95,1.0)*smoothstep(0.005,0.0,d)*(0.7+0.3*sin(t*3.0+fi));
+  }
+  return acc;
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy-0.5*uRes)/min(uRes.x,uRes.y);
+  float t=uT;
+  vec3 col=vec3(0.010,0.013,0.030);
+
+  float bn=fbm(vec3(uv*2.0+vec2(4.0,1.0),t*0.008));
+  col+=vec3(0.10,0.06,0.17)*pow(bn,2.6)*0.9+vec3(0.03,0.07,0.12)*pow(fbm(vec3(uv*1.3+9.0,2.0)),3.0);
+
+  // 星：勉強するほど増える
+  float dens=mix(0.986,0.925,STARS);
+  for(int LY=0;LY<2;LY++){
+    float sc=LY==0?70.0:140.0;
+    vec2 g=uv*sc;vec2 id=floor(g);vec2 f=fract(g)-0.5;
+    float h=h2(id+float(LY)*31.0);
+    if(h>dens){
+      vec2 o=vec2(h2(id+3.1),h2(id+7.7))-0.5;
+      float d=length(f-o*0.6);
+      float tw=0.65+0.35*sin(t*1.7+h*80.0);
+      float b=clamp((h-dens)/(1.0-dens)*1.6+0.2,0.0,1.0);
+      col+=mix(vec3(1.0,0.85,0.7),vec3(0.75,0.85,1.0),h2(id+1.3))*smoothstep(0.11,0.0,d)*tw*b*(LY==0?1.2:0.7);
+    }
+  }
+
+  // 星雲
+  if(NEB>0.0){
+    float cl=COLLAPSE;
+    float rr=length(uv);
+    float sw=atan(uv.y,uv.x)+rr*(4.0+cl*7.0)-t*0.12;
+    vec2 q=vec2(cos(sw),sin(sw))*rr;
+    float n=fbm(vec3(q*3.2,t*0.025));
+    float neb=n*smoothstep(0.62-cl*0.3,0.0,rr);
+    col+=NEB*(vec3(0.5,0.22,0.58)*neb*1.3+vec3(1.0,0.55,0.28)*pow(neb,3.0)*2.4);
+  }
+
+  // 太陽（若いほど暗い）
+  vec2 S=mix(vec2(0.0),vec2(-0.38,0.34),SUNMV);
+  float ds=length(uv-S);
+  float pulse=1.0+0.06*sin(t*1.1);
+  float lum=mix(1.0,SUNLUM,SUNMV);
+  col+=SUNA*lum*STARC*(vec3(1.0,0.72,0.42)*0.010/(ds*ds+0.0016)*pulse*mix(1.0,0.55,SUNMV)*0.55
+            +vec3(1.0,0.96,0.86)*smoothstep(mix(0.05,0.03,SUNMV),mix(0.035,0.018,SUNMV),ds));
+
+  float R=0.27*PR;
+  float Rs=max(R,0.001);
+  vec3 L=normalize(vec3(S-C,LZ));
+
+  if(DEB>0.0){
+    vec2 d=uv-C;vec2 dd=vec2(d.x,d.y*3.2);float r=length(dd);
+    float a=atan(dd.y,dd.x)+t*0.25/(r+0.15);
+    float band=smoothstep(0.08,0.18,r)*smoothstep(0.5,0.28,r);
+    col+=DEB*band*vec3(0.75,0.5,0.35)*pow(fbm(vec3(cos(a)*2.0,sin(a)*2.0,r*9.0)),2.0)*1.3;
+  }
+
+  float mf,rf;
+  vec4 mo=moonAt(uv,Rs,t,L,MANG,mix(1.3,1.85,MOOND),mix(0.3,0.2,MOOND),MOON,mf);
+  float mf2;
+  vec4 mo2=moonAt(uv,Rs,t,L,MANG*0.62+2.6,2.3,0.13,MOON*MOON2,mf2);
+  vec4 ri=ringAt(uv,Rs,t,rf);
+  vec2 pd=(uv-C)/Rs;
+
+  if(rf<0.0)col=mix(col,ri.rgb,ri.a);
+  if(mf<0.0)col=mix(col,mo.rgb,mo.a);
+  if(mf2<0.0)col=mix(col,mo2.rgb,mo2.a);
+  col+=sats(uv,Rs,t,false);
+
+  vec3 atmC=vec3(ATMR,ATMG,ATMB);
+  if(R>0.001){
+    float r2=dot(pd,pd);
+    float rl=sqrt(r2);
+    if(rl>=1.0){
+      float face=clamp(dot(normalize(vec3(pd,0.0)),L)+0.35,0.0,1.0);
+      col+=ATM*atmC*exp(-(rl-1.0)*28.0)*0.55*face*(1.0+HAZE);
+      col+=LAVA*vec3(1.0,0.35,0.08)*exp(-(rl-1.0)*14.0)*0.35;
+    } else {
+      vec3 n=vec3(pd,sqrt(1.0-r2));
+      vec3 sp=rotY(n,ROT);
+      vec3 dq=vec3(DRIFT+SEED,DRIFT*0.37+SEED*0.53,-DRIFT*0.21+SEED*0.29);
+      float h=fbm(sp*1.7+3.0+dq)-0.5+0.25*(fbm(sp*5.0+1.0+dq*0.5)-0.5);
+      h+=SUPERC*0.24*dot(sp,normalize(vec3(0.6,0.3,0.74)));
+      float diff=max(dot(n,L),0.0);
+      float seaLv=mix(-0.7,0.02,SEA)+SEAADJ+SEABIAS*SEA;
+      float isSea=smoothstep(seaLv+0.012,seaLv-0.012,h);
+      float hl=h-seaLv;
+      float lowland=smoothstep(0.26,0.04,hl);
+      float fp=fbm(sp*7.0+5.0);
+      float fv=fbm(sp*3.0+11.0);
+
+      // 陸
+      vec3 rock=mix(vec3(0.22,0.19,0.17),vec3(0.46,0.40,0.33),clamp(h+0.5,0.0,1.0));
+      rock=mix(rock,vec3(0.52,0.25,0.14)*(0.85+0.4*h),REDL*0.7);
+      vec3 veg=mix(vec3(0.30,0.42,0.20),vec3(0.08,0.24,0.10),FOREST*(0.4+0.6*smoothstep(0.42,0.6,fp)));
+      veg=mix(veg,mix(vec3(0.44,0.47,0.18),vec3(0.16,0.36,0.14),fv),FLOWER*0.55);
+      float dry=smoothstep(0.08,0.28,hl)*smoothstep(0.48,0.6,fv);
+      veg=mix(veg,vec3(0.56,0.5,0.28),GRASS*dry*0.75);
+      float vl=dot(veg,vec3(0.3,0.59,0.11))/0.33;
+      veg=mix(veg,vec3(VEGR,VEGG,VEGB)*vl,VEGAMT);
+      vec3 land=mix(rock,veg,GREEN*lowland);
+      float coast=smoothstep(0.06,0.0,abs(hl));
+      land=mix(land,vec3(0.36,0.31,0.18),MATS*coast*0.6);
+      land=mix(land,vec3(0.55,0.5,0.32),AGRI*lowland*smoothstep(0.55,0.7,noise(sp*20.0))*0.45);
+
+      // 海
+      float depth=clamp((seaLv-h)*4.0,0.0,1.0);
+      vec3 ocB=vec3(OCR,OCG,OCB);
+      vec3 ocean=mix(ocB*1.3,ocB*0.25,depth);
+      ocean=mix(ocean,vec3(0.10,0.33,0.28),MATS*(1.0-depth)*0.35);
+
+      vec3 surf=mix(land,ocean,isSea);
+
+      // 氷
+      float iceL=clamp(ICE+ICEOSC*sin(t*0.5),0.0,1.0);
+      float iceLine=mix(1.05,-0.08,iceL);
+      float ice=smoothstep(iceLine,iceLine+0.05,abs(sp.y)+h*0.12+(fbm(sp*6.0+13.0)-0.5)*0.22)*step(0.001,iceL);
+      surf=mix(surf,vec3(0.86,0.9,0.95),ice);
+
+      // 溶岩・衝突・噴火
+      float cracks=smoothstep(0.06,0.0,abs(fbm(sp*3.5+7.0)-0.5));
+      surf=mix(surf,vec3(0.09,0.04,0.03),LAVA*0.85);
+      vec3 emit=LAVA*(vec3(1.0,0.32,0.05)*cracks*1.6+vec3(0.6,0.12,0.02)*smoothstep(0.1,-0.2,h))*(0.75+0.25*sin(t*0.6+h*12.0));
+      float ib=smoothstep(0.9,0.98,noise(sp*9.0+floor(t*0.7)*3.1));
+      emit+=IMP*vec3(1.0,0.45,0.12)*ib*1.6;
+      float vz=smoothstep(0.62,0.74,fbm(sp*5.0+21.0))*(1.0-isSea);
+      emit+=VOLC*vec3(1.0,0.35,0.05)*vz*(0.6+0.4*sin(t*2.0+h*20.0));
+      float kd=length(sp-normalize(vec3(-0.5,0.3,0.8)));
+      emit+=FLASH*vec3(1.0,0.8,0.5)*smoothstep(0.5,0.0,kd)*3.0;
+
+      vec3 c=surf*(0.025+diff*1.15*SUNLUM*STARC)*(1.0-DARK*0.6);
+      vec3 rf2=reflect(-L,n);
+      c+=isSea*(1.0-LAVA)*(1.0-ice)*vec3(1.0,0.92,0.8)*pow(max(rf2.z,0.0),36.0)*0.55*diff;
+
+      // 霞（太古の橙の空）
+      c=mix(c,atmC*(0.06+diff*0.8),HAZE);
+
+      // 雲・塵
+      vec3 cp=rotY(n,CROT);
+      float cl=smoothstep(0.52,0.72,fbm(cp*2.6+vec3(0.0,0.0,t*0.01)))*CLOUD;
+      vec3 cloudC=mix(vec3(1.0),vec3(0.75,0.68,0.58),max(DARK,HAZE));
+      c=mix(c,cloudC*(0.02+diff*1.05*SUNLUM),cl);
+      c=mix(c,vec3(0.22,0.18,0.15)*(0.02+diff),DARK*0.45);
+
+      // 夜の灯り
+      float night=smoothstep(0.12,-0.06,dot(n,L));
+      float landm=(1.0-isSea)*(1.0-ice);
+      float fireD=smoothstep(0.86,0.9,noise(sp*70.0))*smoothstep(0.45,0.6,fbm(sp*3.0+2.0));
+      emit+=vec3(1.0,0.55,0.2)*fireD*FIRE*night*landm*(0.6+0.4*sin(t*5.0+fp*40.0));
+      float th=mix(0.9,0.55,clamp(CITY,0.0,1.3)/1.3);
+      float cluster=smoothstep(0.42,0.58,fbm(sp*4.0+2.0));
+      cluster=max(cluster,COAST*smoothstep(0.1,0.0,hl)*0.9);
+      float dots=smoothstep(th,th+0.05,noise(sp*55.0))*cluster;
+      float rd=ROADS*smoothstep(0.018,0.0,abs(fbm(sp*6.0+4.0)-0.5))*cluster*0.6;
+      float lights=(dots+rd)*step(0.001,CITY)*min(1.0,CITY*3.0);
+      emit+=vec3(1.0,0.72,0.36)*lights*night*landm*(1.0-cl*0.7)*1.4;
+      c+=(1.0-night)*lights*landm*vec3(0.05,0.045,0.04);
+
+      c+=emit;
+      float rim=pow(1.0-n.z,2.6);
+      c+=ATM*atmC*rim*clamp(dot(n,L)+0.4,0.0,1.0)*0.9;
+      float edge=smoothstep(1.0,0.985,rl);
+      col=mix(col,c,edge);
+    }
+  }
+
+  if(rf>=0.0)col=mix(col,ri.rgb,ri.a);
+  if(mf>=0.0)col=mix(col,mo.rgb,mo.a);
+  if(mf2>=0.0)col=mix(col,mo2.rgb,mo2.a);
+  col+=sats(uv,Rs,t,true);
+
+  // 軌道エレベーター
+  if(ELEV>0.0){
+    vec2 dir=normalize(vec2(0.94,0.30));
+    vec2 a0=C+dir*R*0.995, b0=C+dir*R*2.0;
+    vec2 pa=uv-a0, ba=b0-a0;
+    float hh=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+    float d=length(pa-ba*hh);
+    col+=ELEV*vec3(0.8,0.85,0.95)*smoothstep(0.0022,0.0,d)*0.8;
+    col+=ELEV*vec3(1.0,0.85,0.55)*smoothstep(0.007,0.0,length(uv-b0))*1.2;
+    float mv=fract(t*0.15);
+    col+=ELEV*vec3(1.0,0.9,0.7)*smoothstep(0.004,0.0,length(uv-(a0+ba*mv)));
+  }
+
+  // 船
+  if(SHIPS>0.0){
+    for(int i=0;i<6;i++){
+      float fi=float(i);
+      if(fi>=SHIPS*6.0)break;
+      float a=fi*1.9+0.4;
+      vec2 dir=vec2(cos(a),sin(a));
+      float ph=fract(t*0.035+fi*0.173);
+      vec2 head=C+dir*(Rs*1.25+ph*1.1);
+      vec2 tail=head-dir*0.09;
+      vec2 pa=uv-tail,ba=head-tail;
+      float hh=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+      float d=length(pa-ba*hh);
+      col+=vec3(0.7,0.9,1.0)*smoothstep(0.004,0.0,d)*hh*(1.0-ph)*1.2;
+    }
+  }
+
+  // 完成した惑星たち
+  for(int i=0;i<8;i++){
+    float fi=float(i);
+    if(fi>=DONE)break;
+    vec2 pp=vec2(0.44-0.05*fi,0.43);
+    vec2 d=(uv-pp)/0.013;float r2=dot(d,d);
+    if(r2<1.0){
+      vec3 n=vec3(d,sqrt(1.0-r2));
+      vec3 base=mix(vec3(0.25,0.45,0.78),vec3(0.78,0.38,0.3),fract(fi*0.618));
+      float lit=0.08+max(dot(n,normalize(vec3(S-pp,0.4))),0.0);
+      col=mix(col,base*lit,smoothstep(1.0,0.75,r2));
+    }
+  }
+
+  float vig=smoothstep(1.15,0.35,length(uv));
+  col*=mix(0.75,1.0,vig);
+  col=1.0-exp(-col*1.35);
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+function initGL() {
+  if (!gl) return false;
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; } return s; };
+  const v = sh(gl.VERTEX_SHADER, VS), f = sh(gl.FRAGMENT_SHADER, FS);
+  if (!v || !f) return false;
+  const prog = gl.createProgram(); gl.attachShader(prog, v); gl.attachShader(prog, f); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return false; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  uRes = gl.getUniformLocation(prog, 'uRes'); uT = gl.getUniformLocation(prog, 'uT'); uU = gl.getUniformLocation(prog, 'U4');
+  return true;
+}
+const glOK = initGL();
+if (!glOK) $('nogl').hidden = false;
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  let w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+  const maxPx = 1.3e6; const k = Math.sqrt(Math.min(1, maxPx / Math.max(1, w * h)));
+  w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+if ('ResizeObserver' in window) new ResizeObserver(resize).observe(canvas); else addEventListener('resize', resize);
+resize();
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- 再生（タイムラプス） ----------
+let replay = null;
+$('replay').addEventListener('click', () => {
+  const to = lapOf(liveHours()).local;
+  if (reduce || to < 0.05) return;
+  replay = { start: performance.now(), dur: Math.min(22000, 5000 + to * 55), to };
+  $('replay').textContent = '再生中…';
+});
+
+// ---------- 出来事の通知 ----------
+let lastStage = null, toastTimer = 0;
+function toast(name, prefix) {
+  const el = $('toast');
+  el.textContent = '';
+  el.append(prefix || '新しい出来事：');
+  const b = document.createElement('b'); b.textContent = name; el.append(b);
+  el.hidden = false; el.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity = '0'; setTimeout(() => { el.hidden = true; }, 650); }, 4200);
+}
+
+// ---------- UI描画 ----------
+function renderPanel() {
+  const total = liveHours();
+  const { lap, local } = lapOf(total);
+  const LD = lapDef(lap);
+  const sh = toStory(local);
+  const si = stageAt(sh);
+  const st = M[si];
+  $('stageNo').textContent = '第' + (lap + 1) + 'の惑星「' + LD.name + '」 ・ ' + st.era + ' ・ ' + (si + 1) + ' / ' + M.length;
+  $('stageName').textContent = st.name;
+  $('stageDesc').textContent = st.desc;
+  $('total').innerHTML = fmtH(total) + '<small>時間</small>';
+  $('today').innerHTML = fmtH(todayHours()) + '<small>時間</small>';
+  $('age').textContent = fmtAgo(agoAt(sh));
+  if (si < LAST) {
+    const nx = M[si + 1];
+    $('nextLabel').textContent = '次は「' + nx.name + '」';
+    $('nextLeft').textContent = 'あと ' + fmtH(RH[si + 1] - local) + ' 時間';
+    $('nextBar').style.width = ((local - RH[si]) / (RH[si + 1] - RH[si]) * 100).toFixed(1) + '%';
+  } else {
+    $('nextLabel').textContent = 'この惑星は完成。次は「' + lapDef(lap + 1).name + '」';
+    $('nextLeft').textContent = 'あと ' + fmtH(LAPLEN - local) + ' 時間';
+    $('nextBar').style.width = ((local - RH[LAST]) / (LAPLEN - RH[LAST]) * 100).toFixed(1) + '%';
+  }
+  const key = lap * 1000 + si;
+  if (lastStage !== null && key > lastStage) {
+    if (Math.floor(lastStage / 1000) < lap) toast(LD.name, '新しい惑星：'); else toast(st.name);
+  }
+  lastStage = key;
+
+  $('chronTitle').textContent = '惑星の年表（' + LD.name + '）';
+  $('planets').textContent = (lap > 0 ? '完成した惑星：' + Array.from({ length: lap }, (_, i) => lapDef(i).name).join('、') + '。' : '') + 'この星の条件：' + LD.note;
+
+  const ol = $('chron');
+  const sig = lap + ':' + si;
+  if (ol.dataset.si !== sig) {
+    ol.dataset.si = sig;
+    ol.textContent = '';
+    let era = '';
+    M.forEach((s, i) => {
+      if (s.era !== era) {
+        era = s.era;
+        const e = document.createElement('li'); e.className = 'era'; e.textContent = era; ol.append(e);
+      }
+      const li = document.createElement('li');
+      li.className = i < si ? 'done' : i === si ? 'done here' : i === si + 1 ? 'next' : 'future';
+      const nm = document.createElement('span'); nm.className = 'nm';
+      nm.textContent = i <= si + 1 ? s.name : '？？？';
+      if (i <= si && s.ago >= 0) { const sm = document.createElement('small'); sm.textContent = fmtAgo(s.ago); nm.append(sm); }
+      const hr = document.createElement('span'); hr.className = 'hr'; hr.textContent = RH[i] + ' 時間';
+      li.append(nm, hr); ol.append(li);
+    });
+  }
+}
+
+function renderList() {
+  const ul = $('list'); ul.textContent = '';
+  const items = state.sessions.slice().sort((a, b) => b.at - a.at).slice(0, 12);
+  if (!items.length) {
+    const p = document.createElement('p'); p.className = 'empty';
+    p.textContent = 'まだ記録がありません。タイマーを動かすか、あとから分数を入れると、惑星が育ちはじめます。';
+    ul.append(p); return;
+  }
+  for (const s of items) {
+    const li = document.createElement('li');
+    const d = new Date(s.at);
+    const when = document.createElement('span'); when.className = 'when';
+    when.textContent = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    const tag = document.createElement('em'); tag.textContent = s.src === 'timer' ? 'タイマー' : '手入力'; when.append(tag);
+    if (isMorning(s)) { const am = document.createElement('em'); am.className = 'am'; am.textContent = '朝活'; when.append(am); }
+    const min = document.createElement('span'); min.className = 'min'; min.textContent = s.min + ' 分';
+    const del = document.createElement('button'); del.type = 'button'; del.textContent = '削除';
+    let armed = 0;
+    del.addEventListener('click', () => {
+      if (!armed) { del.textContent = 'もう一度で削除'; del.classList.add('sure'); armed = setTimeout(() => { armed = 0; del.textContent = '削除'; del.classList.remove('sure'); }, 3000); return; }
+      clearTimeout(armed);
+      state.sessions = state.sessions.filter(x => x.id !== s.id);
+      lastStage = null; save(); renderAll();
+    });
+    li.append(when, min, del); ul.append(li);
+  }
+  const total = state.sessions.length;
+  if (total > items.length) { const p = document.createElement('p'); p.className = 'empty'; p.style.marginTop = '8px'; p.textContent = 'ほか ' + (total - items.length) + ' 件'; ul.append(p); }
+}
+
+function renderTimer() {
+  const on = !!state.runningSince;
+  const ms = runningMs(); const s = Math.floor(ms / 1000);
+  $('clock').textContent = pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60);
+  $('clock').classList.toggle('on', on);
+  const b = $('toggle');
+  b.textContent = on ? '終えて記録する' : '勉強をはじめる';
+  b.classList.toggle('stop', on);
+  $('focusBtn').textContent = on ? '集中画面を開く' : '集中画面ではじめる';
+}
+
+function renderAll() { renderPanel(); renderList(); renderTimer(); renderStreak(); }
+
+// ---------- 操作 ----------
+function addSession(min, at, src, morning) { const o = { id: uid(), at, min, src }; if (morning) o.morning = true; state.sessions.push(o); }
+function startIsMorning(ms) { const hr = new Date(ms).getHours(); return hr >= 4 && hr < 8; }
+function isMorning(s) { return !!s.morning || (s.src === 'timer' && startIsMorning(s.at)); }
+
+// ---------- 連続記録 ----------
+function dayMap() {
+  const m = new Map();
+  const add = (k, min, am) => { const o = m.get(k) || { min: 0, am: false }; o.min += min; o.am = o.am || am; m.set(k, o); };
+  for (const s of state.sessions) add(dayKey(s.at), s.min, isMorning(s));
+  if (state.runningSince) add(dayKey(state.runningSince), runningMs() / 60000, startIsMorning(state.runningSince));
+  return m;
+}
+function shiftKey(k, n) { const [y, mo, d] = k.split('-').map(Number); return fmtDate(new Date(y, mo - 1, d + n, 12)); }
+function streakNow(m, pred) {
+  let k = dayKey(Date.now());
+  if (!pred(m.get(k))) k = shiftKey(k, -1);
+  let n = 0;
+  while (pred(m.get(k))) { n++; k = shiftKey(k, -1); }
+  return n;
+}
+function streakBest(m, pred) {
+  const keys = [...m.keys()].filter(k => pred(m.get(k))).sort();
+  let best = 0, run = 0, prev = null;
+  for (const k of keys) { run = prev && shiftKey(prev, 1) === k ? run + 1 : 1; best = Math.max(best, run); prev = k; }
+  return best;
+}
+const studied = o => !!o && o.min > 0;
+const morning = o => !!o && o.am;
+let heatSig = '';
+function renderStreak() {
+  const m = dayMap();
+  const today = dayKey(Date.now());
+  const sNow = streakNow(m, studied), sBest = streakBest(m, studied);
+  const aNow = streakNow(m, morning), aBest = streakBest(m, morning);
+  const ym = today.slice(0, 7);
+  const aMonth = [...m.entries()].filter(([k, o]) => k.startsWith(ym) && o.am).length;
+  $('stNow').innerHTML = sNow + '<small>日</small>';
+  $('stBest').textContent = '最長 ' + sBest + '日';
+  $('amNow').innerHTML = aNow + '<small>日</small>';
+  $('amBest').textContent = '最長 ' + aBest + '日';
+  $('amMonth').innerHTML = aMonth + '<small>日</small>';
+
+  const sig = today + '|' + [...m.entries()].map(([k, o]) => k + ':' + Math.floor(o.min / 15) + (o.am ? 'a' : '')).join(',');
+  if (sig === heatSig) return;
+  heatSig = sig;
+  const [ty, tm, td] = today.split('-').map(Number);
+  const tDate = new Date(ty, tm - 1, td, 12);
+  const wd = (tDate.getDay() + 6) % 7;
+  const start = new Date(ty, tm - 1, td - (19 * 7 + wd), 12);
+  const cells = $('hCells'), months = $('hMonths');
+  cells.textContent = ''; months.textContent = '';
+  let lastMonth = -1;
+  for (let w = 0; w < 20; w++) {
+    const colStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7, 12);
+    const sp = document.createElement('span');
+    if (colStart.getMonth() !== lastMonth) { sp.textContent = (colStart.getMonth() + 1) + '月'; lastMonth = colStart.getMonth(); }
+    months.append(sp);
+    for (let d = 0; d < 7; d++) {
+      const dt = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + d, 12);
+      const k = fmtDate(dt);
+      const c = document.createElement('i'); c.className = 'cell';
+      if (k > today) { c.classList.add('fut'); cells.append(c); continue; }
+      const o = m.get(k);
+      const h = o ? o.min / 60 : 0;
+      if (h > 0) c.classList.add(h < 1 ? 'l1' : h < 3 ? 'l2' : h < 6 ? 'l3' : 'l4');
+      if (o && o.am) c.classList.add('am');
+      if (k === today) c.classList.add('today');
+      c.title = (dt.getMonth() + 1) + '/' + dt.getDate() + '  ' + h.toFixed(1) + '時間' + (o && o.am ? '・朝活' : '');
+      cells.append(c);
+    }
+  }
+}
+$('toggle').addEventListener('click', () => {
+  $('timerMsg').textContent = '';
+  if (!state.runningSince) {
+    state.runningSince = Date.now();
+    $('longConfirm').hidden = true;
+    save(); renderAll(); return;
+  }
+  const min = Math.round(runningMs() / 60000);
+  if (min < 1) {
+    state.runningSince = null; save(); renderAll();
+    $('timerMsg').textContent = '1分未満だったので記録しませんでした。'; return;
+  }
+  if (min > 300) { $('longMin').value = String(min); $('longConfirm').hidden = false; return; }
+  addSession(min, state.runningSince, 'timer');
+  state.runningSince = null; save(); renderAll();
+  $('timerMsg').textContent = min + ' 分を記録しました。';
+});
+$('longSave').addEventListener('click', () => {
+  const min = Math.round(Number($('longMin').value));
+  if (!(min >= 1 && min <= 1440)) { $('timerMsg').textContent = '1〜1440分の範囲で入れてください。'; return; }
+  addSession(min, state.runningSince || Date.now(), 'timer');
+  state.runningSince = null; $('longConfirm').hidden = true; save(); renderAll();
+  $('timerMsg').textContent = min + ' 分を記録しました。';
+});
+$('longCancel').addEventListener('click', () => {
+  state.runningSince = null; $('longConfirm').hidden = true; save(); renderAll();
+  $('timerMsg').textContent = '今回のタイマーは記録しませんでした。';
+});
+
+const manDate = $('manDate');
+manDate.value = dayKey(Date.now());
+manDate.max = dayKey(Date.now());
+$('chips').addEventListener('click', e => {
+  const b = e.target.closest('button[data-m]'); if (!b) return;
+  $('manMin').value = b.dataset.m; $('manMin').focus();
+});
+$('manAdd').addEventListener('click', () => {
+  const min = Math.round(Number($('manMin').value));
+  if (!(min >= 1 && min <= 1440)) { $('manMsg').textContent = '1〜1440分の範囲で入れてください。'; return; }
+  let at = Date.now();
+  const v = manDate.value;
+  if (v && v !== dayKey(Date.now())) { const [y, m, d] = v.split('-').map(Number); at = new Date(y, m - 1, d, 21, 0).getTime(); }
+  addSession(min, at, 'manual', $('manMorning').checked);
+  save(); renderAll();
+  $('manMin').value = ''; $('manMorning').checked = false;
+  $('manMsg').textContent = min + ' 分を記録しました。';
+});
+
+// ---------- 集中画面 ----------
+const focusEl = $('focus');
+let battery = null, wakeLock = null, ctlTimer = 0, driftTimer = 0;
+if (navigator.getBattery) {
+  navigator.getBattery().then(bt => {
+    battery = bt;
+    bt.addEventListener('levelchange', renderFocus);
+    bt.addEventListener('chargingchange', renderFocus);
+    renderFocus();
+  }).catch(() => {});
+}
+function renderFocus() {
+  if (focusEl.hidden) return;
+  const on = !!state.runningSince;
+  focusEl.classList.toggle('idle', !on);
+  const el = $('fEl'); el.textContent = '';
+  const put = (num, unit) => { el.append(num); const s = document.createElement('small'); s.textContent = unit; el.append(s); };
+  if (!on) el.textContent = '停止中';
+  else {
+    const m = Math.floor(runningMs() / 60000);
+    if (m < 60) put(String(m), '分'); else { put(String(Math.floor(m / 60)), '時間'); put(String(m % 60), '分'); }
+  }
+  const d = new Date();
+  $('fClock').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const fb = $('fBat');
+  if (battery) {
+    const lv = Math.round(battery.level * 100);
+    fb.hidden = false; fb.textContent = lv + '%';
+    fb.classList.toggle('low', lv <= 20 && !battery.charging);
+    if (battery.charging) { const s = document.createElement('small'); s.textContent = '充電中'; fb.append(s); }
+  } else fb.hidden = true;
+  $('fStop').textContent = on ? '終えて記録する' : 'はじめる';
+  if (!on) $('fctl').hidden = false;
+}
+function showCtl() {
+  $('fctl').hidden = false;
+  clearTimeout(ctlTimer);
+  ctlTimer = setTimeout(() => { if (state.runningSince) $('fctl').hidden = true; }, 5000);
+}
+async function lockScreen() {
+  try { if (navigator.wakeLock && !focusEl.hidden) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+function drift() {
+  const x = (Math.random() - 0.5) * 6, y = (Math.random() - 0.5) * 6;
+  $('fbox').style.transform = 'translate(' + x.toFixed(2) + 'vw,' + y.toFixed(2) + 'vh)';
+}
+function openFocus(autoStart) {
+  if (autoStart && !state.runningSince) { state.runningSince = Date.now(); $('timerMsg').textContent = ''; $('longConfirm').hidden = true; save(); renderAll(); }
+  focusEl.insertBefore(canvas, focusEl.firstChild);
+  focusEl.hidden = false;
+  $('fctl').hidden = !!state.runningSince;
+  $('fHint').hidden = false; setTimeout(() => { $('fHint').hidden = true; }, 4000);
+  try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+  lockScreen();
+  clearInterval(driftTimer); driftTimer = setInterval(drift, 60000);
+  renderFocus();
+}
+function closeFocus() {
+  focusEl.hidden = true;
+  $('nogl').before(canvas);
+  clearInterval(driftTimer); clearTimeout(ctlTimer);
+  try { if (wakeLock) wakeLock.release(); } catch (e) {}
+  wakeLock = null;
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); } catch (e) {}
+}
+$('focusBtn').addEventListener('click', () => openFocus(true));
+focusEl.addEventListener('click', e => { if (!e.target.closest('button')) showCtl(); });
+$('fClose').addEventListener('click', closeFocus);
+$('fStop').addEventListener('click', () => {
+  if (!state.runningSince) { openFocus(true); return; }
+  closeFocus(); $('toggle').click();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !focusEl.hidden) closeFocus(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !focusEl.hidden) { lockScreen(); renderFocus(); } });
+if (location.hash === '#focus') openFocus(false);
+
+// ---------- ループ ----------
+const t0 = performance.now();
+let lastPanel = 0, lastDraw = 0, lastFrame = performance.now();
+let rot = 0, crot = 0, mang = 2.2;
+function frame(now) {
+  const dtRaw = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  const lp = lapOf(liveHours());
+  let h = lp.local;
+  if (replay) {
+    const k = Math.min(1, (now - replay.start) / replay.dur);
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    h = replay.to * e;
+    if (k >= 1) { replay = null; $('replay').textContent = '最初から再生'; }
+  }
+  const sp = reduce ? 0.3 : 1;
+  const sh = toStory(h);
+  const spin = tv('spin', sh), md = tv('moonD', sh);
+  rot += dtRaw * 0.035 * spin * sp;
+  crot += dtRaw * 0.05 * spin * sp;
+  mang += dtRaw * 0.06 * sp / Math.pow(0.6 + md * 0.4, 1.5);
+
+  const throttled = !focusEl.hidden && !replay && now - lastDraw < 45;
+  if (glOK && !throttled) {
+    lastDraw = now;
+    resize();
+    for (let i = 0; i < U_ORDER.length; i++) uBuf[i] = tv(U_ORDER[i], sh);
+    const LD = lapDef(lp.lap);
+    const lv = { seed: LD.seed, starR: LD.star[0], starG: LD.star[1], starB: LD.star[2], vegR: LD.veg[0], vegG: LD.veg[1], vegB: LD.veg[2], vegAmt: LD.veg[3], seaBias: LD.seaBias, moon2: LD.moon2, done: Math.min(8, lp.lap) };
+    let j = U_ORDER.length;
+    for (const k of LAP_KEYS) uBuf[j++] = lv[k];
+    uBuf[j++] = rot; uBuf[j++] = crot; uBuf[j++] = mang;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+    gl.uniform1f(uT, (now - t0) / 1000 * sp);
+    gl.uniform4fv(uU, uBuf);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  const ci = stageAt(sh);
+  $('capName').textContent = M[ci].name;
+  $('capAge').textContent = fmtAgo(agoAt(sh));
+
+  if (now - lastPanel > 1000) { lastPanel = now; renderTimer(); renderFocus(); if (state.runningSince) { renderPanel(); renderStreak(); } }
+  requestAnimationFrame(frame);
+}
+
+$('footNote').textContent = '約' + RH[PRESENT] + '時間で現在、' + LAPLEN + '時間ごとに新しい惑星';
+renderAll();
+requestAnimationFrame(frame);
+
+// ---------- 記録の引き継ぎ（Claudeの外で使うとき） ----------
+const IN_CLAUDE = window.self !== window.top || !!window.claude;
+if (!IN_CLAUDE) $('backupCard').hidden = false;
+$('expBtn').addEventListener('click', () => {
+  try {
+    const data = JSON.stringify({ app: 'hoshisodate', version: 1, exportedAt: new Date().toISOString(), sessions: state.sessions }, null, 1);
+    const blob = new Blob([data], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'hoshisodate-' + fmtDate(new Date()).replace(/-/g, '') + '.json';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    $('bkMsg').textContent = state.sessions.length + ' 件の記録を書き出しました。';
+  } catch (e) { $('bkMsg').textContent = '書き出せませんでした。別のブラウザで試してください。'; }
+});
+$('impBtn').addEventListener('click', () => $('impFile').click());
+$('impFile').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    const list = Array.isArray(d) ? d : d.sessions;
+    if (!Array.isArray(list)) throw new Error('bad');
+    const ok = list.filter(x => x && typeof x.id === 'string' && Number.isFinite(x.at) && Number.isFinite(x.min) && x.min > 0 && x.min <= 1440);
+    const seen = new Set(state.sessions.map(x => x.id));
+    const add = ok.filter(x => !seen.has(x.id)).map(x => { const o = { id: x.id, at: x.at, min: Math.round(x.min), src: x.src === 'timer' ? 'timer' : 'manual' }; if (x.morning) o.morning = true; return o; });
+    state.sessions = state.sessions.concat(add);
+    lastStage = null; save(); renderAll();
+    $('bkMsg').textContent = add.length + ' 件の記録を読み込みました。' + (ok.length - add.length ? '（' + (ok.length - add.length) + ' 件はすでにありました）' : '');
+  } catch (err) { $('bkMsg').textContent = 'このファイルは読み込めませんでした。「記録を書き出す」で作ったファイルを選んでください。'; }
+});
+if (!IN_CLAUDE && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ---------- 同期 ----------
+(async () => {
+  try {
+    if (!window.claude || typeof window.claude.use !== 'function') return;
+    const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+    if (!db || !user) return;
+    const id = await user.id();
+    if (!id) return;
+    docRef = db.doc('data/users/' + id + '/planet');
+    const snap = await docRef.get();
+    if (snap.exists) {
+      const d = snap.data() || {};
+      const remote = Array.isArray(d.sessions) ? d.sessions : [];
+      const seen = new Set(remote.map(s => s.id));
+      const extra = state.sessions.filter(s => !seen.has(s.id));
+      state.sessions = remote.concat(extra);
+      state.runningSince = d.runningSince || state.runningSince || null;
+      persistLocal();
+      lastStage = null; renderAll();
+      if (extra.length) save(); else setSync('同期済み（どの端末からでも同じ惑星）');
+    } else {
+      save();
+    }
+    docRef.onSnapshot(s => {
+      if (!s.exists || s.metadata.hasPendingWrites) return;
+      const d = s.data() || {};
+      state.sessions = Array.isArray(d.sessions) ? d.sessions.slice() : [];
+      state.runningSince = d.runningSince || null;
+      persistLocal(); renderAll();
+    }, () => setSync('同期が止まりました。この端末には保存しています'));
+  } catch (e) {
+    setSync('この端末に保存しています');
+  }
+})();
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
